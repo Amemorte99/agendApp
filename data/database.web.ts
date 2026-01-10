@@ -1,5 +1,5 @@
 // data/database.web.ts
-export interface Task {
+export interface Task {  // ← Export obligatoire ici aussi !
   id: string;
   title: string;
   description?: string;
@@ -11,10 +11,14 @@ export interface Task {
 }
 
 export const initDatabase = () => {
-  console.warn('[SQLite Web] Mode mock – pas de base réelle sur web');
+  console.warn('[Web DB] Mode simulation – pas de stockage réel');
 };
 
-export const addTask = async (_task: Omit<Task, 'id' | 'createdAt'>): Promise<string> => {
-  console.warn('[SQLite Web] Ajout impossible sur web');
-  throw new Error('SQLite non supporté sur le web (expérimental)');
+export const addTask = async (): Promise<string> => {
+  throw new Error('Ajout impossible sur web (SQLite non supporté)');
 };
+
+export const getAllTasks = (): Task[] => [];
+export const getTasksForToday = (): Task[] => [];
+export const updateTask = () => {};
+export const deleteTask = () => {};

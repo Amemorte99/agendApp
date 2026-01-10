@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { addTask } from '../data/database';
+import { addTask } from '../data/database';  // ← Import essentiel (maintenant reconnu)
 
 export default function NewTaskScreen() {
   const router = useRouter();
@@ -42,27 +42,43 @@ export default function NewTaskScreen() {
     }
   };
 
-  const handleSave = () => {
-    if (!title.trim()) return Alert.alert('Erreur', 'Titre obligatoire');
-    if (!selectedDate) return Alert.alert('Erreur', 'Date et heure obligatoires');
-    if (selectedDate < new Date()) return Alert.alert('Erreur', 'Date dans le futur svp');
+const handleSave = () => {
+  if (!title.trim()) {
+    return Alert.alert('Erreur', 'Le titre est obligatoire');
+  }
 
-    try {
-      addTask({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        date: selectedDate.toISOString(),
-        repeat,
-      });
+  if (!selectedDate) {
+    return Alert.alert('Erreur', 'Veuillez sélectionner la date ET l’heure');
+  }
 
-      Alert.alert('Succès', 'Tâche ajoutée avec succès !', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
-    } catch (err) {
-      console.error('Erreur sauvegarde:', err);
-      Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
-    }
-  };
+  const now = new Date();
+  const isToday = selectedDate.toDateString() === now.toDateString();
+
+  if (selectedDate < now || (isToday && selectedDate.getTime() <= now.getTime())) {
+    return Alert.alert(
+      'Erreur',
+      'La date/heure doit être dans le futur. Pour aujourd’hui, l’heure doit être supérieure à maintenant.'
+    );
+  }
+
+  try {
+    addTask({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      date: selectedDate.toISOString(),
+      repeat,
+      done: false,
+      notified: false
+    });
+
+    Alert.alert('Succès', 'Tâche ajoutée avec succès !', [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  } catch (err) {
+    console.error('Erreur sauvegarde:', err);
+    Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
+  }
+};
 
   const dateDisplay = selectedDate
     ? selectedDate.toLocaleDateString('fr-FR', {
@@ -113,7 +129,6 @@ export default function NewTaskScreen() {
         <View style={styles.dateTimeSection}>
           <Text style={styles.sectionTitle}>Date et heure *</Text>
 
-          {/* Champ Date */}
           <TouchableOpacity style={styles.field} onPress={() => setShowDatePicker(true)}>
             <MaterialIcons name="calendar-today" size={24} color="#5c7cfa" />
             <View style={styles.fieldText}>
@@ -124,7 +139,6 @@ export default function NewTaskScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Champ Heure */}
           <TouchableOpacity
             style={[styles.field, !selectedDate && styles.disabled]}
             onPress={() => selectedDate && setShowTimePicker(true)}
@@ -152,7 +166,7 @@ export default function NewTaskScreen() {
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleDateChange}
             minimumDate={new Date()}
-            themeVariant="light" // Force le thème clair → évite le blanc total
+            themeVariant="light"
           />
         )}
 

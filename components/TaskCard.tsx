@@ -1,36 +1,75 @@
 // components/TaskCard.tsx
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { useSharedValue, withTiming } from 'react-native-reanimated'; // Pro : animations
-
-type Task = { id: string; title: string; date: Date; done: boolean };
+import { useRouter } from 'expo-router';
+import { Task } from '../data/database'; // Assure-toi que ce chemin est correct
 
 interface Props {
   task: Task;
-  onComplete?: (id: string) => void;
+  onDelete: () => void;
+  onToggleDone: () => void;
 }
 
-export default function TaskCard({ task, onComplete }: Props) {
-  const scale = useSharedValue(1);
+export default function TaskCard({ task, onDelete, onToggleDone }: Props) {
+  const router = useRouter();
 
-  const handleComplete = () => {
-    scale.value = withTiming(0.95, { duration: 100 }, () => {
-      scale.value = withTiming(1);
-      onComplete?.(task.id);
-    });
+  const handleDeletePress = () => {
+    Alert.alert(
+      'Supprimer la tâche ?',
+      'Cette action est irréversible',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: onDelete,
+        },
+      ]
+    );
   };
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale: scale.value }] }]}>
-      <TouchableOpacity onPress={handleComplete}>
-        <MaterialIcons name={task.done ? 'check-circle' : 'radio-button-unchecked'} size={24} color="#5C7CFA" />
+    <TouchableOpacity
+      style={[styles.card, task.done && styles.cardDone]}
+      onPress={() => router.push(`/task/${task.id}`)} // Ouvre les détails au clic sur la carte
+      activeOpacity={0.8}
+    >
+      {/* Checkbox / Done */}
+      <TouchableOpacity onPress={onToggleDone} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+        <MaterialIcons
+          name={task.done ? 'check-circle' : 'radio-button-unchecked'}
+          size={32}
+          color={task.done ? '#10b981' : '#9ca3af'}
+        />
       </TouchableOpacity>
+
+      {/* Contenu principal */}
       <View style={styles.content}>
-        <Text style={[styles.title, task.done && styles.done]}>{task.title}</Text>
-        <Text style={styles.time}>{task.date.toLocaleTimeString()}</Text>
+        <Text style={[styles.title, task.done && styles.titleDone]}>
+          {task.title}
+        </Text>
+
+        {task.description ? (
+          <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
+            {task.description}
+          </Text>
+        ) : null}
+
+        <Text style={styles.time}>
+          {new Date(task.date).toLocaleString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            day: 'numeric',
+            month: 'short',
+          })}
+        </Text>
       </View>
-      <MaterialIcons name="more-vert" size={24} color="#94A3B8" />
-    </Animated.View>
+
+      {/* Bouton Supprimer */}
+      <TouchableOpacity onPress={handleDeletePress} hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
+        <MaterialIcons name="delete-outline" size={28} color="#ef4444" />
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 }
 
@@ -38,17 +77,42 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'white',
     borderRadius: 16,
     padding: 16,
     marginVertical: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  content: { flex: 1, marginLeft: 16 },
-  title: { fontSize: 16, fontWeight: '500' },
-  done: { textDecorationLine: 'line-through', color: '#94A3B8' },
-  time: { fontSize: 14, color: '#94A3B8', marginTop: 4 },
+  cardDone: {
+    backgroundColor: '#f0fdf4',
+    opacity: 0.9,
+  },
+  content: {
+    flex: 1,
+    marginHorizontal: 16,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  titleDone: {
+    textDecorationLine: 'line-through',
+    color: '#6b7280',
+  },
+  description: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  time: {
+    fontSize: 14,
+    color: '#5c7cfa',
+    marginTop: 6,
+    fontWeight: '500',
+  },
 });
