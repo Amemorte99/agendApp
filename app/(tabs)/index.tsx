@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,22 +14,18 @@ import Animated, { useSharedValue, withSpring } from 'react-native-reanimated';
 import { useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import TaskCard from '../../components/TaskCard';
-import { getTasksForToday, deleteTask, updateTask } from '../../data/database';
+import { useTaskStore } from '../../stores/taskStore'; // ← Utilise le store global
 
 export default function TodayScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { todayTasks, fetchTodayTasks, removeTask, toggleTaskDone } = useTaskStore();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const fabScale = useSharedValue(1);
 
-  const loadTasks = () => {
-    const todayTasks = getTasksForToday();
-    setTasks(todayTasks);
-  };
-
+  // Charge initial + écoute les changements via le store
   useEffect(() => {
-    loadTasks();
+    fetchTodayTasks(); // Charge au montage
   }, []);
 
   const handleDelete = (id: string) => {
@@ -38,17 +34,13 @@ export default function TodayScreen() {
       {
         text: 'Supprimer',
         style: 'destructive',
-        onPress: () => {
-          deleteTask(id);
-          loadTasks();
-        },
+        onPress: () => removeTask(id), // Mise à jour instantanée via store
       },
     ]);
   };
 
-  const handleToggleDone = (task: Task) => {
-    updateTask(task.id, { done: !task.done });
-    loadTasks();
+  const handleToggleDone = (id: string) => {
+    toggleTaskDone(id); // Mise à jour instantanée via store
   };
 
   const handleAddPress = () => {
@@ -83,14 +75,14 @@ export default function TodayScreen() {
         </Animated.View>
       </View>
 
-      {/* Liste */}
+      {/* Liste des tâches – mise à jour instantanée via store */}
       <FlashList
-        data={tasks}
+        data={todayTasks}
         renderItem={({ item }) => (
           <TaskCard
             task={item}
             onDelete={() => handleDelete(item.id)}
-            onToggleDone={() => handleToggleDone(item)}
+            onToggleDone={() => handleToggleDone(item.id)}
           />
         )}
         keyExtractor={(item) => item.id}
@@ -119,10 +111,10 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC', // Gris très clair ultra moderne
+    backgroundColor: '#F8FAFC',
   },
   containerDark: {
-    backgroundColor: '#0F172A', // Slate foncé premium
+    backgroundColor: '#0F172A',
   },
   header: {
     flexDirection: 'row',
@@ -160,7 +152,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#6366F1', // Indigo plus doux et premium
+    backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#6366F1',
@@ -172,7 +164,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 140, // Plus d'espace pour FAB
+    paddingBottom: 140,
   },
   emptyContainer: {
     flex: 1,
