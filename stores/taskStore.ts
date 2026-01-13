@@ -1,14 +1,22 @@
 // stores/taskStore.ts
 import { create } from 'zustand';
-import { Task, getAllTasks, getTasksForToday, addTask, updateTask, deleteTask } from '../data/database';
+import {
+  Task,
+  getAllTasks,
+  getTasksForToday,
+  addTask,
+  updateTask,
+  deleteTask,
+} from '../data/database';
 
 interface TaskState {
   allTasks: Task[];
   todayTasks: Task[];
   loading: boolean;
+
   fetchAllTasks: () => void;
   fetchTodayTasks: () => void;
-  addNewTask: (taskData: Omit<Task, 'id' | 'createdAt'>) => void;
+  addNewTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'done' | 'notified'>) => void;
   toggleTaskDone: (id: string) => void;
   updateExistingTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   removeTask: (id: string) => void;
@@ -32,18 +40,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   addNewTask: (taskData) => {
-    const newId = addTask(taskData);
-    const newTask = {
+    const id = addTask(taskData);
+
+    const newTask: Task = {
       ...taskData,
-      id: newId,
+      id,
       createdAt: new Date().toISOString(),
       done: false,
       notified: false,
-    } as Task;
+    };
+
+    const today = new Date().toISOString().split('T')[0];
 
     set((state) => ({
       allTasks: [...state.allTasks, newTask],
-      todayTasks: newTask.date.startsWith(new Date().toISOString().split('T')[0])
+      todayTasks: newTask.date.startsWith(today)
         ? [...state.todayTasks, newTask]
         : state.todayTasks,
     }));
@@ -53,12 +64,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const task = get().allTasks.find(t => t.id === id);
     if (!task) return;
 
-    const newDone = !task.done;
-    updateTask(id, { done: newDone });
+    const done = !task.done;
+    updateTask(id, { done });
 
     set((state) => ({
-      allTasks: state.allTasks.map(t => t.id === id ? { ...t, done: newDone } : t),
-      todayTasks: state.todayTasks.map(t => t.id === id ? { ...t, done: newDone } : t),
+      allTasks: state.allTasks.map(t =>
+        t.id === id ? { ...t, done } : t
+      ),
+      todayTasks: state.todayTasks.map(t =>
+        t.id === id ? { ...t, done } : t
+      ),
     }));
   },
 
@@ -66,8 +81,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     updateTask(id, updates);
 
     set((state) => ({
-      allTasks: state.allTasks.map(t => t.id === id ? { ...t, ...updates } : t),
-      todayTasks: state.todayTasks.map(t => t.id === id ? { ...t, ...updates } : t),
+      allTasks: state.allTasks.map(t =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+      todayTasks: state.todayTasks.map(t =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
     }));
   },
 

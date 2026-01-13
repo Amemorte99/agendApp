@@ -13,34 +13,46 @@ import { FlashList } from '@shopify/flash-list';
 import Animated, { useSharedValue, withSpring } from 'react-native-reanimated';
 import { useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
+
 import TaskCard from '../../components/TaskCard';
-import { useTaskStore } from '../../stores/taskStore'; // ← Utilise le store global
+import { useTaskStore } from '../../stores/taskStore';
 
 export default function TodayScreen() {
-  const { todayTasks, fetchTodayTasks, removeTask, toggleTaskDone } = useTaskStore();
+  const {
+    todayTasks,
+    fetchAllTasks,
+    fetchTodayTasks,
+    removeTask,
+    toggleTaskDone,
+  } = useTaskStore();
+
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const fabScale = useSharedValue(1);
 
-  // Charge initial + écoute les changements via le store
   useEffect(() => {
-    fetchTodayTasks(); // Charge au montage
+    fetchAllTasks();
+    fetchTodayTasks();
   }, []);
 
   const handleDelete = (id: string) => {
-    Alert.alert('Supprimer ?', 'Cette tâche sera supprimée définitivement ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: () => removeTask(id), // Mise à jour instantanée via store
-      },
-    ]);
+    Alert.alert(
+      'Supprimer ?',
+      'Cette tâche sera supprimée définitivement.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => removeTask(id),
+        },
+      ]
+    );
   };
 
   const handleToggleDone = (id: string) => {
-    toggleTaskDone(id); // Mise à jour instantanée via store
+    toggleTaskDone(id);
   };
 
   const handleAddPress = () => {
@@ -75,9 +87,12 @@ export default function TodayScreen() {
         </Animated.View>
       </View>
 
-      {/* Liste des tâches – mise à jour instantanée via store */}
+      {/* Liste */}
       <FlashList
         data={todayTasks}
+        keyExtractor={(item) => item.id}
+        estimatedItemSize={100}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <TaskCard
             task={item}
@@ -85,8 +100,6 @@ export default function TodayScreen() {
             onToggleDone={() => handleToggleDone(item.id)}
           />
         )}
-        keyExtractor={(item) => item.id}
-        estimatedItemSize={100}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <MaterialIcons
@@ -95,27 +108,21 @@ export default function TodayScreen() {
               color={isDark ? '#475569' : '#CBD5E1'}
             />
             <Text style={[styles.emptyTitle, isDark && styles.textDark]}>
-              Aucune tâche pour aujourd'hui
+              Aucune tâche pour aujourd’hui
             </Text>
             <Text style={[styles.emptySubtitle, isDark && styles.textDarkSub]}>
               Appuie sur le + pour organiser ta journée
             </Text>
           </View>
         }
-        contentContainerStyle={styles.listContent}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  containerDark: {
-    backgroundColor: '#0F172A',
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  containerDark: { backgroundColor: '#0F172A' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -131,23 +138,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderBottomColor: '#334155',
   },
-  greeting: {
-    fontSize: 16,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  date: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 4,
-  },
-  textDark: {
-    color: '#F1F5F9',
-  },
-  textDarkSub: {
-    color: '#94A3B8',
-  },
+  greeting: { fontSize: 16, color: '#64748B', fontWeight: '500' },
+  date: { fontSize: 26, fontWeight: '700', color: '#111827', marginTop: 4 },
+  textDark: { color: '#F1F5F9' },
+  textDarkSub: { color: '#94A3B8' },
   fab: {
     width: 60,
     height: 60,
@@ -155,10 +149,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
     elevation: 10,
   },
   listContent: {
