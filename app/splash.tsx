@@ -1,38 +1,50 @@
 // app/splash.tsx
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
   withDelay,
-  Easing 
+  Easing,
 } from 'react-native-reanimated';
-
-const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
 
   // Animations
   const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.8);
-  const translateY = useSharedValue(50);
+  const scale = useSharedValue(0.9);
+  const translateY = useSharedValue(40);
+  const dotsOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Apparition progressive
-    opacity.value = withDelay(300, withTiming(1, { duration: 800, easing: Easing.out(Easing.exp) }));
-    scale.value = withDelay(300, withTiming(1, { duration: 1000, easing: Easing.out(Easing.back(1.5)) }));
-    translateY.value = withDelay(300, withTiming(0, { duration: 1000, easing: Easing.out(Easing.exp) }));
+    // Entrée
+    opacity.value = withTiming(1, {
+      duration: 900,
+      easing: Easing.out(Easing.exp),
+    });
+    scale.value = withTiming(1, {
+      duration: 900,
+      easing: Easing.out(Easing.back(1.4)),
+    });
+    translateY.value = withTiming(0, {
+      duration: 900,
+      easing: Easing.out(Easing.exp),
+    });
 
-    // Redirection après 2.5s (un peu plus long pour apprécier l'animation)
+    // Animation des points
+    dotsOpacity.value = withDelay(
+      400,
+      withTiming(1, { duration: 600 })
+    );
+
+    // 🚀 Navigation JS SAFE
     const timer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 600 }, () => {
-        router.replace('/(tabs)');
-      });
-    }, 2500);
+      router.replace('/(tabs)');
+    }, 2200);
 
     return () => clearTimeout(timer);
   }, []);
@@ -41,43 +53,40 @@ export default function SplashScreen() {
     opacity: opacity.value,
     transform: [
       { scale: scale.value },
-      { translateY: translateY.value }
+      { translateY: translateY.value },
     ],
+  }));
+
+  const dotsStyle = useAnimatedStyle(() => ({
+    opacity: dotsOpacity.value,
   }));
 
   return (
     <LinearGradient
-      colors={['#4f46e5', '#6366f1', '#7c3aed']} // Dégradé indigo-violet premium
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      colors={['#4f46e5', '#6366f1', '#7c3aed']}
       style={styles.container}
     >
       <Animated.View style={[styles.content, animatedStyle]}>
-        {/* Logo avec glow */}
+        {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
-            source={require('../assets/icon.png')} // Mets ton vrai logo ici
+            source={require('../assets/icon.png')}
             style={styles.logo}
           />
           <View style={styles.logoGlow} />
         </View>
 
-        {/* Titre principal */}
+        {/* Texte */}
         <Text style={styles.title}>Agenda Pro</Text>
-
-        {/* Sous-titre élégant */}
         <Text style={styles.subtitle}>
-          Vos tâches, rendez-vous et rappels
-        </Text>
-        <Text style={styles.subtitleSmall}>
-          Simples • Fiables • Toujours à portée de main
+          Organisez vos journées simplement
         </Text>
 
-        {/* Chargement animé (points qui dansent) */}
+        {/* Chargement */}
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Chargement</Text>
-          <Animated.Text style={styles.loadingDots}>
-            •••
+          <Animated.Text style={[styles.loadingDots, dotsStyle]}>
+            …
           </Animated.Text>
         </View>
       </Animated.View>
@@ -86,9 +95,7 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
     flex: 1,
     justifyContent: 'center',
@@ -96,64 +103,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   logoContainer: {
+    marginBottom: 36,
     position: 'relative',
-    marginBottom: 40,
   },
   logo: {
-    width: 140,
-    height: 140,
-    borderRadius: 35,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
+    width: 130,
+    height: 130,
+    borderRadius: 32,
   },
   logoGlow: {
     position: 'absolute',
-    top: -20,
-    left: -20,
-    right: -20,
-    bottom: -20,
-    backgroundColor: 'rgba(99, 102, 241, 0.3)',
-    borderRadius: 50,
+    inset: -18,
+    backgroundColor: 'rgba(99,102,241,0.3)',
+    borderRadius: 48,
     zIndex: -1,
   },
   title: {
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: '800',
-    color: 'white',
-    letterSpacing: -1,
-    marginBottom: 12,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
+    color: '#fff',
+    marginBottom: 10,
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.95)',
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 50,
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitleSmall: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
-    marginBottom: 60,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 18,
+    fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
   },
   loadingDots: {
-    fontSize: 18,
-    color: 'white',
+    fontSize: 22,
     marginLeft: 4,
+    color: '#fff',
   },
 });
