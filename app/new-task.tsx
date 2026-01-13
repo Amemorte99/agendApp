@@ -1,28 +1,29 @@
 // app/new-task.tsx
+import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Platform,
-  KeyboardAvoidingView,
+  useColorScheme,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useColorScheme } from 'react-native';
-import { useTaskStore } from '../stores/taskStore'; // ← Utilise le store pour instantanéité
+
+import { useTaskStore } from '../stores/taskStore';
 
 export default function NewTaskScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { addNewTask } = useTaskStore(); // ← Mise à jour instantanée via store
+  const { addNewTask } = useTaskStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -47,51 +48,46 @@ export default function NewTaskScreen() {
     }
   };
 
-  const handleSave = () => {
-    if (!title.trim()) {
-      return Alert.alert('Erreur', 'Le titre est obligatoire');
-    }
+ const handleSave = async () => {
+  if (!title.trim()) {
+    return Alert.alert('Erreur', 'Le titre est obligatoire');
+  }
 
-    if (!selectedDate) {
-      return Alert.alert('Erreur', 'Veuillez sélectionner la date ET l’heure');
-    }
+  if (!selectedDate) {
+    return Alert.alert('Erreur', 'Veuillez sélectionner la date ET l’heure');
+  }
 
-    const now = new Date();
-    const isToday = selectedDate.toDateString() === now.toDateString();
+  const now = new Date();
 
-    if (selectedDate < now || (isToday && selectedDate.getTime() <= now.getTime())) {
-      return Alert.alert(
-        'Erreur',
-        'La date/heure doit être dans le futur. Pour aujourd’hui, l’heure doit être supérieure à maintenant.'
-      );
-    }
+  // Règle : date/heure doit être dans le futur (strictement > maintenant)
+  if (selectedDate <= now) {
+    return Alert.alert(
+      'Erreur',
+      'La date et l’heure doivent être dans le futur.\n' +
+      'Si c’est aujourd’hui, choisis une heure supérieure à maintenant.'
+    );
+  }
 
-    try {
-      addNewTask({
-          title: title.trim(),
-          description: description.trim() || undefined,
-          date: selectedDate.toISOString(),
-          repeat,
-          done: false,
-          notified: false
-      });
+  try {
+    await addNewTask({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      date: selectedDate.toISOString(),
+      repeat,
+      done: false,
+      notified: false
+    });
 
-      Alert.alert('Succès', 'Tâche ajoutée avec succès !', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
-    } catch (err) {
-      console.error('Erreur sauvegarde:', err);
-      Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
-    }
-  };
-
+    Alert.alert('Succès', 'Tâche ajoutée avec succès !', [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  } catch (err) {
+    console.error('Erreur ajout tâche:', err);
+    Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
+  }
+};
   const dateDisplay = selectedDate
-    ? selectedDate.toLocaleDateString('fr-FR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
+    ? selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : 'À sélectionner';
 
   const timeDisplay = selectedDate
@@ -103,33 +99,38 @@ export default function NewTaskScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={[styles.header, isDark && styles.headerDark]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back-ios" size={24} color={isDark ? '#F1F5F9' : '#111827'} />
+            <MaterialIcons name="arrow-back-ios" size={26} color={isDark ? '#F1F5F9' : '#111827'} />
           </TouchableOpacity>
           <Text style={[styles.title, isDark && styles.textDark]}>Nouvelle tâche</Text>
-          <View style={{ width: 24 }} />
+          <View style={{ width: 26 }} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Titre */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="title" size={24} color={isDark ? '#94A3B8' : '#64748B'} style={styles.inputIcon} />
+          <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
+            <MaterialIcons name="title" size={24} color={isDark ? '#94A3B8' : '#6366F1'} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, isDark && styles.inputDark]}
-              placeholder="Titre de la tâche *"
+              placeholder="Titre *"
               placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
               value={title}
               onChangeText={setTitle}
               autoFocus
+              autoCapitalize="sentences"
             />
           </View>
 
           {/* Description */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="notes" size={24} color={isDark ? '#94A3B8' : '#64748B'} style={styles.inputIcon} />
+          <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
+            <MaterialIcons name="notes" size={24} color={isDark ? '#94A3B8' : '#6366F1'} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, styles.textArea, isDark && styles.inputDark]}
               placeholder="Description (facultatif)"
@@ -146,15 +147,15 @@ export default function NewTaskScreen() {
           <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
             <Text style={[styles.sectionTitle, isDark && styles.textDark]}>Date et heure *</Text>
 
-            <TouchableOpacity style={styles.field} onPress={() => setShowDatePicker(true)}>
+            <TouchableOpacity style={styles.fieldRow} onPress={() => setShowDatePicker(true)}>
               <MaterialIcons name="calendar-today" size={24} color="#6366F1" />
-              <Text style={[styles.fieldValue, isDark && styles.textDark]}>
+              <Text style={[styles.fieldText, isDark && styles.textDark]}>
                 {dateDisplay}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.field, !selectedDate && styles.disabled]}
+              style={[styles.fieldRow, !selectedDate && styles.disabled]}
               onPress={() => selectedDate && setShowTimePicker(true)}
               disabled={!selectedDate}
             >
@@ -163,7 +164,7 @@ export default function NewTaskScreen() {
                 size={24}
                 color={selectedDate ? '#6366F1' : '#94A3B8'}
               />
-              <Text style={[styles.fieldValue, isDark && styles.textDark]}>
+              <Text style={[styles.fieldText, isDark && styles.textDark]}>
                 {timeDisplay}
               </Text>
             </TouchableOpacity>
@@ -192,15 +193,15 @@ export default function NewTaskScreen() {
             />
           )}
 
-          {/* Fallback web */}
+          {/* Web fallback */}
           {Platform.OS === 'web' && (
-            <View style={styles.webFallback}>
-              <Text style={[styles.webNote, isDark && styles.textDarkSub]}>
-                Sur web : utilisez les champs ci-dessous
+            <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
+              <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+                Date et heure (web)
               </Text>
               <TextInput
                 style={[styles.webInput, isDark && styles.inputDark]}
-                placeholder="Date (AAAA-MM-JJ)"
+                placeholder="AAAA-MM-JJ"
                 placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
                 value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
                 onChangeText={(text) => {
@@ -212,7 +213,7 @@ export default function NewTaskScreen() {
               />
               <TextInput
                 style={[styles.webInput, isDark && styles.inputDark]}
-                placeholder="Heure (HH:MM)"
+                placeholder="HH:MM"
                 placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
                 value={selectedDate ? selectedDate.toTimeString().slice(0, 5) : ''}
                 onChangeText={(text) => {
@@ -230,7 +231,7 @@ export default function NewTaskScreen() {
           {/* Répétition */}
           <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
             <Text style={[styles.sectionTitle, isDark && styles.textDark]}>Répéter</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipContainer}>
               {[
                 { label: 'Aucune', value: 'none' },
                 { label: 'Quotidien', value: 'daily' },
@@ -261,10 +262,11 @@ export default function NewTaskScreen() {
             </ScrollView>
           </View>
 
-          {/* Bouton sauvegarde */}
+          {/* Bouton Ajouter */}
           <TouchableOpacity
             style={[styles.saveButton, isDark && styles.saveButtonDark]}
             onPress={handleSave}
+            activeOpacity={0.85}
           >
             <Text style={styles.saveButtonText}>Ajouter la tâche</Text>
           </TouchableOpacity>
@@ -287,7 +289,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
@@ -306,9 +309,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
   },
-  inputContainer: {
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  inputGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
@@ -317,6 +323,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inputGroupDark: {
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
     flex: 1,
@@ -325,12 +343,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   inputDark: {
-    backgroundColor: '#1E293B',
     color: '#F1F5F9',
-    borderColor: '#334155',
-  },
-  inputIcon: {
-    marginRight: 12,
   },
   textArea: {
     minHeight: 120,
@@ -343,6 +356,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionCardDark: {
     backgroundColor: '#1E293B',
@@ -354,14 +372,14 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 16,
   },
-  field: {
+  fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  fieldValue: {
+  fieldText: {
     flex: 1,
     marginLeft: 16,
     fontSize: 16,
@@ -371,34 +389,19 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-  webFallback: {
-    marginBottom: 24,
-  },
-  webNote: {
-    color: '#64748B',
-    marginBottom: 12,
-    fontSize: 14,
-  },
-  webInput: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  repeatSection: {
-    marginBottom: 32,
+  chipContainer: {
+    paddingVertical: 8,
   },
   repeatChip: {
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 24,
+    paddingHorizontal: 24,
+    borderRadius: 30,
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     marginRight: 12,
+    minWidth: 100,
+    alignItems: 'center',
   },
   repeatChipDark: {
     backgroundColor: '#334155',
@@ -407,30 +410,36 @@ const styles = StyleSheet.create({
   repeatChipActive: {
     backgroundColor: '#6366F1',
     borderColor: '#6366F1',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   repeatChipActiveDark: {
     backgroundColor: '#818CF8',
     borderColor: '#818CF8',
+    shadowColor: '#818CF8',
   },
   repeatChipText: {
     fontSize: 14,
     color: '#374151',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   repeatChipTextActive: {
     color: 'white',
   },
   saveButton: {
     backgroundColor: '#6366F1',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 32,
     shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
   },
   saveButtonDark: {
     backgroundColor: '#818CF8',
@@ -440,5 +449,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 17,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
