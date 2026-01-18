@@ -1,18 +1,7 @@
-// data/database.native.ts
 import * as SQLite from 'expo-sqlite';
+import { Task } from './database';
 
 const db = SQLite.openDatabaseSync('agenda.db');
-
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  date: string;
-  repeat: 'none' | 'daily' | 'weekly' | 'monthly';
-  done: boolean;
-  notified: boolean;
-  createdAt: string;
-}
 
 const normalizeTask = (row: any): Task => ({
   ...row,
@@ -20,7 +9,7 @@ const normalizeTask = (row: any): Task => ({
   notified: Boolean(row.notified),
 });
 
-export const initDatabase = () => {
+export const initDatabase = async () => {
   db.execSync(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY NOT NULL,
@@ -35,48 +24,41 @@ export const initDatabase = () => {
   `);
 };
 
-export const addTask = (
-  task: Omit<Task, 'id' | 'createdAt' | 'done' | 'notified'>
-): string => {
+export const addTask = async (
+  task: Omit<Task, 'id' | 'createdAt'>
+): Promise<Task> => {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
 
   db.runSync(
     `INSERT INTO tasks (id, title, description, date, repeat, done, notified, createdAt)
      VALUES (?, ?, ?, ?, ?, 0, 0, ?)`,
-    [
-      id,
-      task.title,
-      task.description ?? null,
-      task.date,
-      task.repeat,
-      createdAt,
-    ]
+    [id, task.title, task.description ?? null, task.date, task.repeat, createdAt]
   );
 
-  return id;
+  return {
+    id,
+    ...task,
+    done: false,
+    notified: false,
+    createdAt,
+  };
 };
 
-export const getAllTasks = (): Task[] => {
-  return db
-    .getAllSync('SELECT * FROM tasks ORDER BY date ASC')
-    .map(normalizeTask);
-};
+export const getAllTasks = async (): Promise<Task[]> =>
+  db.getAllSync('SELECT * FROM tasks ORDER BY date ASC').map(normalizeTask);
 
-export const getTasksForToday = (): Task[] => {
+export const getTasksForToday = async (): Promise<Task[]> => {
   const today = new Date().toISOString().split('T')[0];
-  const start = `${today}T00:00:00.000Z`;
-  const end = `${today}T23:59:59.999Z`;
-
   return db
     .getAllSync(
-      'SELECT * FROM tasks WHERE date BETWEEN ? AND ? ORDER BY date ASC',
-      [start, end]
+      'SELECT * FROM tasks WHERE date LIKE ? ORDER BY date ASC',
+      [`${today}%`]
     )
     .map(normalizeTask);
 };
 
-export const updateTask = (
+export const updateTask = async (
   id: string,
   updates: Partial<Omit<Task, 'id' | 'createdAt'>>
 ) => {
@@ -86,12 +68,9 @@ export const updateTask = (
   const setClause = entries.map(([k]) => `${k} = ?`).join(', ');
   const values = entries.map(([, v]) => v);
 
-  db.runSync(
-    `UPDATE tasks SET ${setClause} WHERE id = ?`,
-    [...values, id]
-  );
+  db.runSync(`UPDATE tasks SET ${setClause} WHERE id = ?`, [...values, id]);
 };
 
-export const deleteTask = (id: string) => {
+export const deleteTask = async (id: string) => {
   db.runSync('DELETE FROM tasks WHERE id = ?', [id]);
 };

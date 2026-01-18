@@ -1,27 +1,26 @@
-// data/database.ts - Point d'entrée principal
 import { Platform } from 'react-native';
 
-// 1. Définir l'interface Task ici (visible partout)
 export interface Task {
   id: string;
   title: string;
   description?: string;
-  date: string; // ISO string
+  date: string;
   repeat: 'none' | 'daily' | 'weekly' | 'monthly';
   done: boolean;
   notified: boolean;
   createdAt: string;
 }
 
-// 2. Définir les types des fonctions (pour que TS soit heureux)
-type AddTaskFn = (task: Omit<Task, 'id' | 'createdAt'>) => string;
-type GetAllTasksFn = () => Task[];
-type GetTasksForTodayFn = () => Task[];
-type UpdateTaskFn = (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
-type DeleteTaskFn = (id: string) => void;
-type InitDatabaseFn = () => void;
+type AddTaskFn = (task: Omit<Task, 'id' | 'createdAt'>) => Promise<Task>;
+type GetAllTasksFn = () => Promise<Task[]>;
+type GetTasksForTodayFn = () => Promise<Task[]>;
+type UpdateTaskFn = (
+  id: string,
+  updates: Partial<Omit<Task, 'id' | 'createdAt'>>
+) => Promise<void>;
+type DeleteTaskFn = (id: string) => Promise<void>;
+type InitDatabaseFn = () => Promise<void>;
 
-// 3. Importer conditionnellement les implémentations natives/web
 let impl: {
   initDatabase: InitDatabaseFn;
   addTask: AddTaskFn;
@@ -32,15 +31,14 @@ let impl: {
 };
 
 if (Platform.OS === 'web') {
-  impl = require('./database.web').default || require('./database.web');
+  impl = require('./database.web');
 } else {
-  impl = require('./database.native').default || require('./database.native');
+  impl = require('./database.native');
 }
 
-// 4. Exporter les fonctions typées
-export const initDatabase: InitDatabaseFn = impl.initDatabase;
-export const addTask: AddTaskFn = impl.addTask;
-export const getAllTasks: GetAllTasksFn = impl.getAllTasks;
-export const getTasksForToday: GetTasksForTodayFn = impl.getTasksForToday || impl.getAllTasks;
-export const updateTask: UpdateTaskFn = impl.updateTask || (() => {});
-export const deleteTask: DeleteTaskFn = impl.deleteTask || (() => {});
+export const initDatabase = impl.initDatabase;
+export const addTask = impl.addTask;
+export const getAllTasks = impl.getAllTasks;
+export const getTasksForToday = impl.getTasksForToday;
+export const updateTask = impl.updateTask;
+export const deleteTask = impl.deleteTask;

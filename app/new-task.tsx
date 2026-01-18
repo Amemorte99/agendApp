@@ -13,7 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   useColorScheme,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ export default function NewTaskScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
   const { addNewTask } = useTaskStore();
 
   const [title, setTitle] = useState('');
@@ -32,12 +33,15 @@ export default function NewTaskScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
 
-  const handleDateChange = (event: any, date?: Date) => {
+  // ─────────────────────────────────────────
+  // Gestion date / heure
+  // ─────────────────────────────────────────
+  const handleDateChange = (_: any, date?: Date) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (date) setSelectedDate(date);
   };
 
-  const handleTimeChange = (event: any, time?: Date) => {
+  const handleTimeChange = (_: any, time?: Date) => {
     if (Platform.OS === 'android') setShowTimePicker(false);
     if (time && selectedDate) {
       const newDate = new Date(selectedDate);
@@ -48,50 +52,53 @@ export default function NewTaskScreen() {
     }
   };
 
- const handleSave = async () => {
-  if (!title.trim()) {
-    return Alert.alert('Erreur', 'Le titre est obligatoire');
-  }
+  // ─────────────────────────────────────────
+  // Sauvegarde
+  // ─────────────────────────────────────────
+  const handleSave = async () => {
+    if (!title.trim()) {
+      return Alert.alert('Erreur', 'Le titre est obligatoire');
+    }
 
-  if (!selectedDate) {
-    return Alert.alert('Erreur', 'Veuillez sélectionner la date ET l’heure');
-  }
+    if (!selectedDate) {
+      return Alert.alert('Erreur', 'Veuillez sélectionner la date et l’heure');
+    }
 
-  const now = new Date();
+    if (selectedDate <= new Date()) {
+      return Alert.alert('Erreur', 'La date doit être dans le futur');
+    }
 
-  // Règle : date/heure doit être dans le futur (strictement > maintenant)
-  if (selectedDate <= now) {
-    return Alert.alert(
-      'Erreur',
-      'La date et l’heure doivent être dans le futur.\n' +
-      'Si c’est aujourd’hui, choisis une heure supérieure à maintenant.'
-    );
-  }
+    try {
+      await addNewTask({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        date: selectedDate.toISOString(),
+        repeat,
+      });
 
-  try {
-    await addNewTask({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      date: selectedDate.toISOString(),
-      repeat,
-      done: false,
-      notified: false
-    });
+      Alert.alert('Succès', 'Tâche ajoutée avec succès', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      console.error('Erreur ajout tâche:', error);
+      Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
+    }
+  };
 
-    Alert.alert('Succès', 'Tâche ajoutée avec succès !', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
-  } catch (err) {
-    console.error('Erreur ajout tâche:', err);
-    Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
-  }
-};
   const dateDisplay = selectedDate
-    ? selectedDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    ? selectedDate.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
     : 'À sélectionner';
 
   const timeDisplay = selectedDate
-    ? selectedDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    ? selectedDate.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : 'À sélectionner';
 
   return (
@@ -101,11 +108,18 @@ export default function NewTaskScreen() {
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        {/* Header */}
         <View style={[styles.header, isDark && styles.headerDark]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back-ios" size={26} color={isDark ? '#F1F5F9' : '#111827'} />
+            <MaterialIcons
+              name="arrow-back-ios"
+              size={26}
+              color={isDark ? '#F1F5F9' : '#111827'}
+            />
           </TouchableOpacity>
-          <Text style={[styles.title, isDark && styles.textDark]}>Nouvelle tâche</Text>
+          <Text style={[styles.title, isDark && styles.textDark]}>
+            Nouvelle tâche
+          </Text>
           <View style={{ width: 26 }} />
         </View>
 
@@ -116,7 +130,12 @@ export default function NewTaskScreen() {
         >
           {/* Titre */}
           <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
-            <MaterialIcons name="title" size={24} color={isDark ? '#94A3B8' : '#6366F1'} style={styles.inputIcon} />
+            <MaterialIcons
+              name="title"
+              size={24}
+              color={isDark ? '#94A3B8' : '#6366F1'}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={[styles.input, isDark && styles.inputDark]}
               placeholder="Titre *"
@@ -124,13 +143,17 @@ export default function NewTaskScreen() {
               value={title}
               onChangeText={setTitle}
               autoFocus
-              autoCapitalize="sentences"
             />
           </View>
 
           {/* Description */}
           <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
-            <MaterialIcons name="notes" size={24} color={isDark ? '#94A3B8' : '#6366F1'} style={styles.inputIcon} />
+            <MaterialIcons
+              name="notes"
+              size={24}
+              color={isDark ? '#94A3B8' : '#6366F1'}
+              style={styles.inputIcon}
+            />
             <TextInput
               style={[styles.input, styles.textArea, isDark && styles.inputDark]}
               placeholder="Description (facultatif)"
@@ -138,16 +161,19 @@ export default function NewTaskScreen() {
               value={description}
               onChangeText={setDescription}
               multiline
-              numberOfLines={5}
-              textAlignVertical="top"
             />
           </View>
 
-          {/* Date & Heure */}
+          {/* Date & heure */}
           <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
-            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>Date et heure *</Text>
+            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+              Date et heure *
+            </Text>
 
-            <TouchableOpacity style={styles.fieldRow} onPress={() => setShowDatePicker(true)}>
+            <TouchableOpacity
+              style={styles.fieldRow}
+              onPress={() => setShowDatePicker(true)}
+            >
               <MaterialIcons name="calendar-today" size={24} color="#6366F1" />
               <Text style={[styles.fieldText, isDark && styles.textDark]}>
                 {dateDisplay}
@@ -170,15 +196,13 @@ export default function NewTaskScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Pickers */}
+          {/* Pickers natifs */}
           {Platform.OS !== 'web' && showDatePicker && (
             <DateTimePicker
               value={selectedDate || new Date()}
               mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onChange={handleDateChange}
               minimumDate={new Date()}
-              accentColor="#6366F1"
             />
           )}
 
@@ -186,52 +210,18 @@ export default function NewTaskScreen() {
             <DateTimePicker
               value={selectedDate}
               mode="time"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
               onChange={handleTimeChange}
-              is24Hour={true}
-              accentColor="#6366F1"
+              is24Hour
             />
-          )}
-
-          {/* Web fallback */}
-          {Platform.OS === 'web' && (
-            <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
-              <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
-                Date et heure (web)
-              </Text>
-              <TextInput
-                style={[styles.webInput, isDark && styles.inputDark]}
-                placeholder="AAAA-MM-JJ"
-                placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
-                value={selectedDate ? selectedDate.toISOString().split('T')[0] : ''}
-                onChangeText={(text) => {
-                  if (text.length === 10) {
-                    const d = new Date(text);
-                    if (!isNaN(d.getTime())) setSelectedDate(d);
-                  }
-                }}
-              />
-              <TextInput
-                style={[styles.webInput, isDark && styles.inputDark]}
-                placeholder="HH:MM"
-                placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
-                value={selectedDate ? selectedDate.toTimeString().slice(0, 5) : ''}
-                onChangeText={(text) => {
-                  if (text.length === 5 && selectedDate) {
-                    const [h, m] = text.split(':').map(Number);
-                    const newDate = new Date(selectedDate);
-                    newDate.setHours(h || 0, m || 0, 0);
-                    setSelectedDate(newDate);
-                  }
-                }}
-              />
-            </View>
           )}
 
           {/* Répétition */}
           <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
-            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>Répéter</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipContainer}>
+            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+              Répéter
+            </Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {[
                 { label: 'Aucune', value: 'none' },
                 { label: 'Quotidien', value: 'daily' },
@@ -244,7 +234,6 @@ export default function NewTaskScreen() {
                     styles.repeatChip,
                     repeat === item.value && styles.repeatChipActive,
                     isDark && styles.repeatChipDark,
-                    repeat === item.value && isDark && styles.repeatChipActiveDark,
                   ]}
                   onPress={() => setRepeat(item.value as any)}
                 >
@@ -252,7 +241,6 @@ export default function NewTaskScreen() {
                     style={[
                       styles.repeatChipText,
                       repeat === item.value && styles.repeatChipTextActive,
-                      isDark && styles.textDark,
                     ]}
                   >
                     {item.label}
@@ -262,11 +250,10 @@ export default function NewTaskScreen() {
             </ScrollView>
           </View>
 
-          {/* Bouton Ajouter */}
+          {/* Bouton */}
           <TouchableOpacity
             style={[styles.saveButton, isDark && styles.saveButtonDark]}
             onPress={handleSave}
-            activeOpacity={0.85}
           >
             <Text style={styles.saveButtonText}>Ajouter la tâche</Text>
           </TouchableOpacity>
@@ -275,6 +262,7 @@ export default function NewTaskScreen() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

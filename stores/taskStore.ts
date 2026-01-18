@@ -1,12 +1,13 @@
 // stores/taskStore.ts
+import { cancelTaskReminder, scheduleTaskReminder } from '@/utils/notifications';
 import { create } from 'zustand';
 import {
   Task,
+  addTask,
+  deleteTask,
   getAllTasks,
   getTasksForToday,
-  addTask,
   updateTask,
-  deleteTask,
 } from '../data/database';
 
 interface TaskState {
@@ -14,12 +15,19 @@ interface TaskState {
   todayTasks: Task[];
   loading: boolean;
 
-  fetchAllTasks: () => void;
-  fetchTodayTasks: () => void;
-  addNewTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'done' | 'notified'>) => void;
-  toggleTaskDone: (id: string) => void;
-  updateExistingTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
-  removeTask: (id: string) => void;
+  fetchAllTasks: () => Promise<void>;
+  fetchTodayTasks: () => Promise<void>;
+
+  addNewTask: (
+    taskData: Omit<Task, 'id' | 'createdAt' | 'done' | 'notified'>
+  ) => Promise<Task>;
+
+  toggleTaskDone: (id: string) => Promise<void>;
+  updateExistingTask: (
+    id: string,
+    updates: Partial<Omit<Task, 'id' | 'createdAt'>>
+  ) => Promise<void>;
+  removeTask: (id: string) => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -27,75 +35,111 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   todayTasks: [],
   loading: false,
 
-  fetchAllTasks: () => {
+  // ──────────────────────────────
+  // Chargement des tâches
+  // ──────────────────────────────
+  fetchAllTasks: async () => {
     set({ loading: true });
-    const tasks = getAllTasks();
-    set({ allTasks: tasks, loading: false });
+    try {
+      const tasks = await getAllTasks();
+      set({ allTasks: tasks, loading: false });
+    } catch (err) {
+      console.error('[TaskStore] fetchAllTasks:', err);
+      set({ loading: false });
+    }
   },
 
-  fetchTodayTasks: () => {
+  fetchTodayTasks: async () => {
     set({ loading: true });
-    const tasks = getTasksForToday();
-    set({ todayTasks: tasks, loading: false });
+    try {
+      const tasks = await getTasksForToday();
+      set({ todayTasks: tasks, loading: false });
+    } catch (err) {
+      console.error('[TaskStore] fetchTodayTasks:', err);
+      set({ loading: false });
+    }
   },
 
-  addNewTask: (taskData) => {
-    const id = addTask(taskData);
-
-    const newTask: Task = {
-      ...taskData,
-      id,
-      createdAt: new Date().toISOString(),
-      done: false,
-      notified: false,
-    };
+  // ──────────────────────────────
+  // Ajouter une tâche
+  // ──────────────────────────────
+  addNewTask: async (taskData) => {
+    const createdTask = await addTask(taskData);
 
     const today = new Date().toISOString().split('T')[0];
 
     set((state) => ({
-      allTasks: [...state.allTasks, newTask],
-      todayTasks: newTask.date.startsWith(today)
-        ? [...state.todayTasks, newTask]
+      allTasks: [...state.allTasks, createdTask],
+      todayTasks: createdTask.date.startsWith(today)
+        ? [...state.todayTasks, createdTask]
         : state.todayTasks,
     }));
+
+    // Programmer notification si nécessaire
+    await scheduleTaskReminder(createdTask);
+
+    return createdTask;
   },
 
-  toggleTaskDone: (id) => {
-    const task = get().allTasks.find(t => t.id === id);
+  // ──────────────────────────────
+  // Basculer "done" / "non done"
+  // ──────────────────────────────
+  toggleTaskDone: async (id) => {
+    const task = get().allTasks.find((t) => t.id === id);
     if (!task) return;
 
-    const done = !task.done;
-    updateTask(id, { done });
+    const newDone = !task.done;
+    await updateTask(id, { done: newDone });
+
+    const updatedTask = { ...task, done: newDone };
 
     set((state) => ({
-      allTasks: state.allTasks.map(t =>
-        t.id === id ? { ...t, done } : t
-      ),
-      todayTasks: state.todayTasks.map(t =>
-        t.id === id ? { ...t, done } : t
-      ),
+      allTasks: state.allTasks.map((t) => (t.id === id ? updatedTask : t)),
+      todayTasks: state.todayTasks.map((t) => (t.id === id ? updatedTask : t)),
     }));
+
+    if (newDone) {
+      await cancelTaskReminder(id);
+    }
   },
 
-  updateExistingTask: (id, updates) => {
-    updateTask(id, updates);
+  // ──────────────────────────────
+  // Mettre à jour une tâche
+  // ──────────────────────────────
+  updateExistingTask: async (id, updates) => {
+    await updateTask(id, updates);
+
+    const currentTask = get().allTasks.find((t) => t.id === id);
+    if (!currentTask) return;
+
+    const finalTask = { ...currentTask, ...updates };
+    const today = new Date().toISOString().split('T')[0];
 
     set((state) => ({
-      allTasks: state.allTasks.map(t =>
-        t.id === id ? { ...t, ...updates } : t
-      ),
-      todayTasks: state.todayTasks.map(t =>
-        t.id === id ? { ...t, ...updates } : t
-      ),
+      allTasks: state.allTasks.map((t) => (t.id === id ? finalTask : t)),
+      todayTasks: finalTask.date.startsWith(today)
+        ? state.todayTasks.some((t) => t.id === id)
+          ? state.todayTasks.map((t) => (t.id === id ? finalTask : t))
+          : [...state.todayTasks, finalTask]
+        : state.todayTasks.filter((t) => t.id !== id),
     }));
+
+    // Reprogrammer la notification si la date ou répétition change
+    if ('date' in updates || 'repeat' in updates) {
+      await scheduleTaskReminder(finalTask);
+    }
   },
 
-  removeTask: (id) => {
-    deleteTask(id);
+  // ──────────────────────────────
+  // Supprimer une tâche
+  // ──────────────────────────────
+  removeTask: async (id) => {
+    await cancelTaskReminder(id);
+    await deleteTask(id);
 
     set((state) => ({
-      allTasks: state.allTasks.filter(t => t.id !== id),
-      todayTasks: state.todayTasks.filter(t => t.id !== id),
+      allTasks: state.allTasks.filter((t) => t.id !== id),
+      todayTasks: state.todayTasks.filter((t) => t.id !== id),
     }));
   },
 }));

@@ -1,24 +1,14 @@
-// data/database.web.ts
-export interface Task {  // ← Export obligatoire ici aussi !
-  id: string;
-  title: string;
-  description?: string;
-  date: string;
-  repeat: 'none' | 'daily' | 'weekly' | 'monthly';
-  done: boolean;
-  notified: boolean;
-  createdAt: string;
-}
+import { Task } from './database';
 
-export const initDatabase = () => {
-  console.warn('[Web DB] Mode simulation – pas de stockage réel');
+export const initDatabase = async () => {
+  console.warn('[Web] SQLite désactivé');
 };
 
-export const addTask = async (): Promise<string> => {
-  throw new Error('Ajout impossible sur web (SQLite non supporté)');
+export const addTask = async (): Promise<Task> => {
+  throw new Error('SQLite non supporté sur Web');
 };
 
-export const getAllTasks = (): Task[] => [];
-export const getTasksForToday = (): Task[] => [];
-export const updateTask = () => {};
-export const deleteTask = () => {};
+export const getAllTasks = async (): Promise<Task[]> => [];
+export const getTasksForToday = async (): Promise<Task[]> => [];
+export const updateTask = async () => {};
+export const deleteTask = async () => {};
