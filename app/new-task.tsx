@@ -1,8 +1,8 @@
 // app/new-task.tsx
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -33,39 +33,42 @@ export default function NewTaskScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none');
 
-  // ─────────────────────────────────────────
-  // Gestion date / heure
-  // ─────────────────────────────────────────
-  const handleDateChange = (_: any, date?: Date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
-    if (date) setSelectedDate(date);
-  };
+  const now = new Date();
 
-  const handleTimeChange = (_: any, time?: Date) => {
-    if (Platform.OS === 'android') setShowTimePicker(false);
-    if (time && selectedDate) {
-      const newDate = new Date(selectedDate);
-      newDate.setHours(time.getHours());
-      newDate.setMinutes(time.getMinutes());
-      newDate.setSeconds(0);
-      setSelectedDate(newDate);
-    }
-  };
+  const handleDateChange = useCallback(
+    (_: any, date?: Date) => {
+      if (Platform.OS === 'android') setShowDatePicker(false);
+      if (date) setSelectedDate(date);
+    },
+    []
+  );
 
-  // ─────────────────────────────────────────
-  // Sauvegarde
-  // ─────────────────────────────────────────
-  const handleSave = async () => {
+  const handleTimeChange = useCallback(
+    (_: any, time?: Date) => {
+      if (Platform.OS === 'android') setShowTimePicker(false);
+      if (time && selectedDate) {
+        const newDate = new Date(selectedDate);
+        newDate.setHours(time.getHours(), time.getMinutes(), 0, 0);
+        setSelectedDate(newDate);
+      }
+    },
+    [selectedDate]
+  );
+
+  const handleSave = useCallback(async () => {
     if (!title.trim()) {
-      return Alert.alert('Erreur', 'Le titre est obligatoire');
+      Alert.alert('Erreur', 'Le titre est obligatoire');
+      return;
     }
 
     if (!selectedDate) {
-      return Alert.alert('Erreur', 'Veuillez sélectionner la date et l’heure');
+      Alert.alert('Erreur', 'Sélectionnez date et heure');
+      return;
     }
 
-    if (selectedDate <= new Date()) {
-      return Alert.alert('Erreur', 'La date doit être dans le futur');
+    if (selectedDate <= now) {
+      Alert.alert('Erreur', 'La tâche doit être dans le futur');
+      return;
     }
 
     try {
@@ -76,14 +79,14 @@ export default function NewTaskScreen() {
         repeat,
       });
 
-      Alert.alert('Succès', 'Tâche ajoutée avec succès', [
+      Alert.alert('Succès', 'Tâche créée !', [
         { text: 'OK', onPress: () => router.back() },
       ]);
-    } catch (error) {
-      console.error('Erreur ajout tâche:', error);
+    } catch (err) {
+      console.error('Erreur création tâche:', err);
       Alert.alert('Erreur', 'Impossible d’ajouter la tâche');
     }
-  };
+  }, [title, description, selectedDate, repeat, router, addNewTask]);
 
   const dateDisplay = selectedDate
     ? selectedDate.toLocaleDateString('fr-FR', {
@@ -92,141 +95,160 @@ export default function NewTaskScreen() {
         month: 'long',
         year: 'numeric',
       })
-    : 'À sélectionner';
+    : 'Sélectionner';
 
   const timeDisplay = selectedDate
     ? selectedDate.toLocaleTimeString('fr-FR', {
         hour: '2-digit',
         minute: '2-digit',
       })
-    : 'À sélectionner';
+    : 'Sélectionner';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         {/* Header */}
         <View style={[styles.header, isDark && styles.headerDark]}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
             <MaterialIcons
-              name="arrow-back-ios"
-              size={26}
-              color={isDark ? '#F1F5F9' : '#111827'}
+              name="arrow-back"
+              size={28}
+              color={isDark ? '#E2E8F0' : '#334155'}
             />
           </TouchableOpacity>
-          <Text style={[styles.title, isDark && styles.textDark]}>
+
+          <Text style={[styles.title, isDark && styles.titleDark]}>
             Nouvelle tâche
           </Text>
-          <View style={{ width: 26 }} />
+
+          <View style={{ width: 28 }} />
         </View>
 
         <ScrollView
-          style={styles.content}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {/* Titre */}
-          <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
-            <MaterialIcons
-              name="title"
-              size={24}
-              color={isDark ? '#94A3B8' : '#6366F1'}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={[styles.input, isDark && styles.inputDark]}
-              placeholder="Titre *"
-              placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
-              value={title}
-              onChangeText={setTitle}
-              autoFocus
-            />
+          <View style={[styles.card, isDark && styles.cardDark]}>
+            <View style={styles.inputRow}>
+              <MaterialIcons
+                name="title"
+                size={24}
+                color={isDark ? '#94A3B8' : '#64748B'}
+              />
+              <TextInput
+                style={[styles.input, isDark && styles.inputDark]}
+                placeholder="Titre de la tâche *"
+                placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
+                value={title}
+                onChangeText={setTitle}
+                autoFocus
+                autoCapitalize="sentences"
+                returnKeyType="next"
+              />
+            </View>
           </View>
 
           {/* Description */}
-          <View style={[styles.inputGroup, isDark && styles.inputGroupDark]}>
-            <MaterialIcons
-              name="notes"
-              size={24}
-              color={isDark ? '#94A3B8' : '#6366F1'}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={[styles.input, styles.textArea, isDark && styles.inputDark]}
-              placeholder="Description (facultatif)"
-              placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-            />
+          <View style={[styles.card, isDark && styles.cardDark]}>
+            <View style={styles.inputRow}>
+              <MaterialIcons
+                name="notes"
+                size={24}
+                color={isDark ? '#94A3B8' : '#64748B'}
+              />
+              <TextInput
+                style={[styles.input, styles.textArea, isDark && styles.inputDark]}
+                placeholder="Description (facultatif)"
+                placeholderTextColor={isDark ? '#64748B' : '#9CA3AF'}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={5}
+                textAlignVertical="top"
+              />
+            </View>
           </View>
 
-          {/* Date & heure */}
-          <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
-            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
-              Date et heure *
+          {/* Date & Heure */}
+          <View style={[styles.card, isDark && styles.cardDark]}>
+            <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+              Quand ?
             </Text>
 
             <TouchableOpacity
               style={styles.fieldRow}
               onPress={() => setShowDatePicker(true)}
             >
-              <MaterialIcons name="calendar-today" size={24} color="#6366F1" />
-              <Text style={[styles.fieldText, isDark && styles.textDark]}>
+              <Ionicons name="calendar-outline" size={24} color="#6366f1" />
+              <Text style={[styles.fieldValue, isDark && styles.fieldValueDark]}>
                 {dateDisplay}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.fieldRow, !selectedDate && styles.disabled]}
+              style={[styles.fieldRow, !selectedDate && styles.disabledRow]}
               onPress={() => selectedDate && setShowTimePicker(true)}
               disabled={!selectedDate}
             >
-              <MaterialIcons
-                name="access-time"
+              <Ionicons
+                name="time-outline"
                 size={24}
-                color={selectedDate ? '#6366F1' : '#94A3B8'}
+                color={selectedDate ? '#6366f1' : '#94A3B8'}
               />
-              <Text style={[styles.fieldText, isDark && styles.textDark]}>
+              <Text style={[styles.fieldValue, isDark && styles.fieldValueDark]}>
                 {timeDisplay}
               </Text>
             </TouchableOpacity>
+
+            {/* Pickers */}
+            {Platform.OS !== 'web' && showDatePicker && (
+              <DateTimePicker
+                value={selectedDate || now}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={now}
+                accentColor="#6366f1"
+              />
+            )}
+
+            {Platform.OS !== 'web' && showTimePicker && selectedDate && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                onChange={handleTimeChange}
+                is24Hour={true}
+                accentColor="#6366f1"
+              />
+            )}
           </View>
 
-          {/* Pickers natifs */}
-          {Platform.OS !== 'web' && showDatePicker && (
-            <DateTimePicker
-              value={selectedDate || new Date()}
-              mode="date"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-
-          {Platform.OS !== 'web' && showTimePicker && selectedDate && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="time"
-              onChange={handleTimeChange}
-              is24Hour
-            />
-          )}
-
           {/* Répétition */}
-          <View style={[styles.sectionCard, isDark && styles.sectionCardDark]}>
-            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+          <View style={[styles.card, isDark && styles.cardDark]}>
+            <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
               Répéter
             </Text>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipContainer}
+            >
               {[
                 { label: 'Aucune', value: 'none' },
-                { label: 'Quotidien', value: 'daily' },
-                { label: 'Hebdomadaire', value: 'weekly' },
-                { label: 'Mensuel', value: 'monthly' },
+                { label: 'Tous les jours', value: 'daily' },
+                { label: 'Toutes les semaines', value: 'weekly' },
+                { label: 'Tous les mois', value: 'monthly' },
               ].map((item) => (
                 <TouchableOpacity
                   key={item.value}
@@ -234,6 +256,7 @@ export default function NewTaskScreen() {
                     styles.repeatChip,
                     repeat === item.value && styles.repeatChipActive,
                     isDark && styles.repeatChipDark,
+                    repeat === item.value && isDark && styles.repeatChipActiveDark,
                   ]}
                   onPress={() => setRepeat(item.value as any)}
                 >
@@ -241,6 +264,7 @@ export default function NewTaskScreen() {
                     style={[
                       styles.repeatChipText,
                       repeat === item.value && styles.repeatChipTextActive,
+                      isDark && styles.repeatChipTextDark,
                     ]}
                   >
                     {item.label}
@@ -250,19 +274,20 @@ export default function NewTaskScreen() {
             </ScrollView>
           </View>
 
-          {/* Bouton */}
+          {/* Bouton Ajouter */}
           <TouchableOpacity
             style={[styles.saveButton, isDark && styles.saveButtonDark]}
             onPress={handleSave}
+            activeOpacity={0.85}
           >
-            <Text style={styles.saveButtonText}>Ajouter la tâche</Text>
+            <Ionicons name="checkmark" size={20} color="white" />
+            <Text style={styles.saveButtonText}>Créer la tâche</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -272,133 +297,131 @@ const styles = StyleSheet.create({
   containerDark: {
     backgroundColor: '#0F172A',
   },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
   },
   headerDark: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(15,23,42,0.95)',
     borderBottomColor: '#334155',
   },
+
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#0F172A',
   },
-  textDark: {
+  titleDark: {
     color: '#F1F5F9',
   },
-  content: {
-    flex: 1,
-  },
+
   scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    marginBottom: 16,
     paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingTop: 16,
+    paddingBottom: 120,
   },
-  inputGroupDark: {
+
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardDark: {
     backgroundColor: '#1E293B',
     borderColor: '#334155',
   },
-  inputIcon: {
-    marginRight: 12,
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
   },
+
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#111827',
-    paddingVertical: 16,
+    color: '#0F172A',
+    paddingVertical: 4,
   },
   inputDark: {
-    color: '#F1F5F9',
+    color: '#E2E8F0',
   },
+
   textArea: {
-    minHeight: 120,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
-  sectionCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  sectionCardDark: {
-    backgroundColor: '#1E293B',
-    borderColor: '#334155',
-  },
+
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
+    color: '#1E293B',
+    marginBottom: 12,
   },
+  sectionTitleDark: {
+    color: '#CBD5E1',
+  },
+
   fieldRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+    gap: 12,
   },
-  fieldText: {
-    flex: 1,
-    marginLeft: 16,
-    fontSize: 16,
-    color: '#111827',
-    fontWeight: '500',
-  },
-  disabled: {
+  disabledRow: {
     opacity: 0.5,
   },
+
+  fieldValue: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0F172A',
+    fontWeight: '500',
+  },
+  fieldValueDark: {
+    color: '#E2E8F0',
+  },
+
   chipContainer: {
     paddingVertical: 8,
+    gap: 12,
   },
+
   repeatChip: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 30,
-    backgroundColor: '#F3F4F6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 12,
-    minWidth: 100,
-    alignItems: 'center',
+    borderColor: '#E2E8F0',
   },
   repeatChipDark: {
     backgroundColor: '#334155',
     borderColor: '#475569',
   },
+
   repeatChipActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
-    shadowColor: '#6366F1',
+    backgroundColor: '#6366f1',
+    borderColor: '#6366f1',
+    shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -409,21 +432,29 @@ const styles = StyleSheet.create({
     borderColor: '#818CF8',
     shadowColor: '#818CF8',
   },
+
   repeatChipText: {
     fontSize: 14,
-    color: '#374151',
     fontWeight: '600',
+    color: '#475569',
+  },
+  repeatChipTextDark: {
+    color: '#CBD5E1',
   },
   repeatChipTextActive: {
     color: 'white',
   },
+
   saveButton: {
-    backgroundColor: '#6366F1',
-    borderRadius: 20,
-    paddingVertical: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    borderRadius: 16,
+    paddingVertical: 18,
     marginTop: 32,
-    shadowColor: '#6366F1',
+    gap: 8,
+    shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -433,10 +464,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#818CF8',
     shadowColor: '#818CF8',
   },
+
   saveButtonText: {
     color: 'white',
     fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
 });

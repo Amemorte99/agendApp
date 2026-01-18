@@ -1,5 +1,5 @@
 // app/task/[id].tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,20 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getAllTasks, updateTask, deleteTask } from '@/data/database';
+import { useTaskStore } from '@/stores/taskStore'; // ← UTILISE LE STORE ICI
+import * as Haptics from 'expo-haptics';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+
+  const { allTasks, updateExistingTask, removeTask, toggleTaskDone } = useTaskStore();
 
   const [task, setTask] = useState<any>(null);
   const [title, setTitle] = useState('');
@@ -28,99 +32,97 @@ export default function TaskDetailScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Charger la tâche au montage
+  // Charger la tâche depuis le STORE
   useEffect(() => {
-    const allTasks = getAllTasks();
-    const foundTask = allTasks.find(t => t.id === id);
+    const foundTask = allTasks.find((t) => t.id === id);
     if (foundTask) {
       setTask(foundTask);
       setTitle(foundTask.title);
       setDescription(foundTask.description || '');
       setSelectedDate(new Date(foundTask.date));
       setRepeat(foundTask.repeat);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
     } else {
       Alert.alert('Erreur', 'Tâche introuvable');
       router.back();
     }
-  }, [id]);
+  }, [id, allTasks, router, fadeAnim]);
 
-  const handleDateChange = (event: any, date?: Date) => {
+  const handleDateChange = useCallback((_: any, date?: Date) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (date) setSelectedDate(date);
-  };
+  }, []);
 
-  const handleTimeChange = (event: any, time?: Date) => {
+  const handleTimeChange = useCallback((_: any, time?: Date) => {
     if (Platform.OS === 'android') setShowTimePicker(false);
     if (time && selectedDate) {
       const newDate = new Date(selectedDate);
-      newDate.setHours(time.getHours());
-      newDate.setMinutes(time.getMinutes());
-      newDate.setSeconds(0);
+      newDate.setHours(time.getHours(), time.getMinutes(), 0, 0);
       setSelectedDate(newDate);
     }
-  };
+  }, [selectedDate]);
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = useCallback(async () => {
     if (!title.trim()) {
       Alert.alert('Erreur', 'Le titre est obligatoire');
       return;
     }
 
     if (!selectedDate) {
-      Alert.alert('Erreur', 'La date et l’heure sont obligatoires');
+      Alert.alert('Erreur', 'Date et heure obligatoires');
       return;
     }
 
     const now = new Date();
-    const isToday = selectedDate.toDateString() === now.toDateString();
-
-    if (selectedDate < now || (isToday && selectedDate.getTime() <= now.getTime())) {
-      return Alert.alert('Erreur', 'Pour aujourd’hui, l’heure doit être supérieure à maintenant');
+    if (selectedDate <= now) {
+      Alert.alert('Erreur', 'La tâche doit être dans le futur');
+      return;
     }
 
     try {
-      updateTask(task.id, {
+      await updateExistingTask(task.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         date: selectedDate.toISOString(),
         repeat,
       });
 
-      Alert.alert('Succès', 'Tâche modifiée avec succès !', [
-        { text: 'OK', onPress: () => {
-          setIsEditing(false);
-          // Recharger la tâche
-          const updatedTasks = getAllTasks();
-          const updated = updatedTasks.find(t => t.id === id);
-          if (updated) setTask(updated);
-        }},
-      ]);
+      // Le store met déjà à jour allTasks → pas besoin de recharger manuellement
+      setIsEditing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Succès', 'Tâche modifiée !');
     } catch (err) {
       console.error('Erreur modification:', err);
       Alert.alert('Erreur', 'Impossible de modifier la tâche');
     }
-  };
+  }, [task?.id, title, description, selectedDate, repeat, updateExistingTask]);
 
-  const handleDelete = () => {
-    Alert.alert('Supprimer la tâche ?', 'Cette action est irréversible', [
+  const handleDelete = useCallback(() => {
+    Alert.alert('Supprimer ?', 'Cette action est irréversible', [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Supprimer',
         style: 'destructive',
-        onPress: () => {
-          deleteTask(task.id);
+        onPress: async () => {
+          await removeTask(task.id);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           Alert.alert('Supprimée', 'La tâche a été supprimée');
           router.back();
         },
       },
     ]);
-  };
+  }, [task?.id, removeTask, router]);
 
-  const toggleDone = () => {
-    updateTask(task.id, { done: !task.done });
-    setTask({ ...task, done: !task.done });
-  };
+  const toggleDone = useCallback(() => {
+    toggleTaskDone(task.id);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [task?.id, toggleTaskDone]);
 
   if (!task) {
     return (
@@ -145,57 +147,78 @@ export default function TaskDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back-ios" size={24} color="#111827" />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={16}>
+          <MaterialIcons name="arrow-back" size={28} color="#334155" />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {isEditing ? 'Modifier la tâche' : task.title}
+
+        <Text style={styles.title} numberOfLines={1}>
+          {isEditing ? 'Modifier' : task.title}
         </Text>
-        <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
-          <MaterialIcons name={isEditing ? 'close' : 'edit'} size={24} color="#5c7cfa" />
+
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setIsEditing(!isEditing);
+          }}
+          hitSlop={16}
+        >
+          <MaterialIcons
+            name={isEditing ? 'close' : 'edit'}
+            size={26}
+            color={isEditing ? '#ef4444' : '#6366f1'}
+          />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {isEditing ? (
-          <>
-            {/* Mode édition */}
-            <TextInput
-              style={styles.input}
-              placeholder="Titre *"
-              value={title}
-              onChangeText={setTitle}
-            />
+          <View style={styles.editContainer}>
+            {/* Titre */}
+            <View style={styles.inputGroup}>
+              <MaterialIcons name="title" size={24} color="#6366f1" />
+              <TextInput
+                style={styles.input}
+                placeholder="Titre *"
+                value={title}
+                onChangeText={setTitle}
+                autoFocus
+              />
+            </View>
 
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Description (facultatif)"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-            />
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <MaterialIcons name="notes" size={24} color="#6366f1" />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Description (facultatif)"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={5}
+              />
+            </View>
 
             {/* Date & Heure */}
-            <View style={styles.dateTimeSection}>
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Date et heure *</Text>
 
               <TouchableOpacity style={styles.field} onPress={() => setShowDatePicker(true)}>
-                <MaterialIcons name="calendar-today" size={24} color="#5c7cfa" />
+                <Ionicons name="calendar-outline" size={24} color="#6366f1" />
                 <Text style={styles.fieldValue}>{dateDisplay}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.field} onPress={() => setShowTimePicker(true)}>
-                <MaterialIcons name="access-time" size={24} color="#5c7cfa" />
+                <Ionicons name="time-outline" size={24} color="#6366f1" />
                 <Text style={styles.fieldValue}>{timeDisplay}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Répétition */}
-            <View style={styles.repeatSection}>
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Répéter</Text>
-              <ScrollView horizontal>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {['none', 'daily', 'weekly', 'monthly'].map((value) => (
                   <TouchableOpacity
                     key={value}
@@ -219,18 +242,18 @@ export default function TaskDetailScreen() {
             </View>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
-              <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+              <Ionicons name="checkmark" size={20} color="white" />
+              <Text style={styles.saveButtonText}>Enregistrer</Text>
             </TouchableOpacity>
-          </>
+          </View>
         ) : (
-          <>
-            {/* Mode affichage */}
-            <View style={styles.taskInfo}>
+          <Animated.View style={[styles.viewContainer, { opacity: fadeAnim }]}>
+            <View style={styles.taskCard}>
               <TouchableOpacity onPress={toggleDone} style={styles.doneButton}>
                 <MaterialIcons
                   name={task.done ? 'check-circle' : 'radio-button-unchecked'}
-                  size={40}
-                  color={task.done ? '#10b981' : '#9ca3af'}
+                  size={48}
+                  color={task.done ? '#10b981' : '#94a3af'}
                 />
               </TouchableOpacity>
 
@@ -239,24 +262,36 @@ export default function TaskDetailScreen() {
                   {task.title}
                 </Text>
 
-                {task.description && (
+                {task.description ? (
                   <Text style={styles.taskDescription}>{task.description}</Text>
-                )}
+                ) : null}
 
-                <Text style={styles.taskDate}>
-                  {new Date(task.date).toLocaleString('fr-FR', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
+                <View style={styles.taskMeta}>
+                  <Ionicons name="calendar-outline" size={18} color="#6366f1" />
+                  <Text style={styles.taskDate}>
+                    {new Date(task.date).toLocaleString('fr-FR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
 
-                <Text style={styles.taskRepeat}>
-                  Répétition : {task.repeat === 'none' ? 'Aucune' : task.repeat === 'daily' ? 'Tous les jours' : task.repeat === 'weekly' ? 'Toutes les semaines' : 'Tous les mois'}
-                </Text>
+                <View style={styles.taskMeta}>
+                  <Ionicons name="repeat-outline" size={18} color="#6366f1" />
+                  <Text style={styles.taskRepeat}>
+                    {task.repeat === 'none'
+                      ? 'Aucune répétition'
+                      : task.repeat === 'daily'
+                      ? 'Tous les jours'
+                      : task.repeat === 'weekly'
+                      ? 'Toutes les semaines'
+                      : 'Tous les mois'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -264,19 +299,19 @@ export default function TaskDetailScreen() {
               <MaterialIcons name="delete-forever" size={24} color="white" />
               <Text style={styles.deleteButtonText}>Supprimer la tâche</Text>
             </TouchableOpacity>
-          </>
+          </Animated.View>
         )}
       </ScrollView>
 
-      {/* Pickers */}
+      {/* Date & Time Pickers */}
       {Platform.OS !== 'web' && showDatePicker && (
         <DateTimePicker
           value={selectedDate || new Date()}
           mode="date"
-          display="spinner"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
           onChange={handleDateChange}
           minimumDate={new Date()}
-          themeVariant="light"
+          accentColor="#6366f1"
         />
       )}
 
@@ -284,10 +319,10 @@ export default function TaskDetailScreen() {
         <DateTimePicker
           value={selectedDate}
           mode="time"
-          display="spinner"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
           onChange={handleTimeChange}
           is24Hour={true}
-          themeVariant="light"
+          accentColor="#6366f1"
         />
       )}
     </SafeAreaView>
@@ -295,92 +330,227 @@ export default function TaskDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
-    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827' },
-  content: { flex: 1, padding: 20 },
-
-  taskInfo: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+    borderBottomColor: '#f1f5f9',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 4,
   },
-  doneButton: { marginRight: 20 },
-  taskContent: { flex: 1 },
-  taskTitle: { fontSize: 20, fontWeight: '600', color: '#111827' },
-  taskDone: { textDecorationLine: 'line-through', color: '#6b7280' },
-  taskDescription: { fontSize: 16, color: '#4b5563', marginTop: 8 },
-  taskDate: { fontSize: 16, color: '#5c7cfa', marginTop: 12 },
-  taskRepeat: { fontSize: 15, color: '#6b7280', marginTop: 8 },
 
-  deleteButton: {
-    flexDirection: 'row',
-    backgroundColor: '#ef4444',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 20,
   },
-  deleteButtonText: { color: 'white', fontSize: 16, fontWeight: '600', marginLeft: 12 },
+
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+
+  editContainer: {
+    gap: 16,
+  },
+
+  inputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 
   input: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
+    flex: 1,
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 16,
+    color: '#0f172a',
+    marginLeft: 12,
   },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
 
-  dateTimeSection: {
-    backgroundColor: 'white',
+  textArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+
+  section: {
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#e2e8f0',
   },
+
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 12,
+  },
+
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e2e8f0',
+    gap: 12,
   },
-  fieldText: { flex: 1, marginLeft: 16 },
-  fieldLabel: { fontSize: 15, color: '#6b7280' },
-  fieldValue: { fontSize: 16, color: '#111827', fontWeight: '500' },
 
-  repeatSection: { marginBottom: 32 },
+  fieldValue: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0f172a',
+    fontWeight: '500',
+  },
+
   repeatChip: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 24,
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderRadius: 999,
+    backgroundColor: '#f1f5f9',
     marginRight: 12,
   },
+
   repeatChipActive: {
-    backgroundColor: '#5c7cfa',
-    borderColor: '#5c7cfa',
+    backgroundColor: '#6366f1',
   },
-  repeatChipText: { fontSize: 14, color: '#374151' },
-  repeatChipTextActive: { color: 'white' },
+
+  repeatChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+
+  repeatChipTextActive: {
+    color: 'white',
+  },
+
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    borderRadius: 16,
+    paddingVertical: 18,
+    marginTop: 24,
+    gap: 8,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+
+  saveButtonText: {
+    color: 'white',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+
+  taskCard: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+
+  doneButton: {
+    marginRight: 20,
+  },
+
+  taskContent: {
+    flex: 1,
+  },
+
+  taskTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+
+  taskDone: {
+    textDecorationLine: 'line-through',
+    color: '#94a3af',
+  },
+
+  taskDescription: {
+    fontSize: 16,
+    color: '#475569',
+    marginTop: 8,
+    lineHeight: 24,
+  },
+
+  taskMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+
+  taskDate: {
+    fontSize: 15,
+    color: '#6366f1',
+    fontWeight: '500',
+  },
+
+  taskRepeat: {
+    fontSize: 15,
+    color: '#64748b',
+    marginTop: 4,
+  },
+
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    borderRadius: 16,
+    paddingVertical: 18,
+    gap: 8,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  loading: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 40,
+  },
 });
