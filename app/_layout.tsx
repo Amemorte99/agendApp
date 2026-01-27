@@ -1,71 +1,93 @@
-import { router, Stack } from 'expo-router';
-import { useEffect } from 'react';
+// app/_layout.tsx
 import * as Notifications from 'expo-notifications';
+import { router, Stack } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 
+// Configuration globale des notifications (doit être appelée une seule fois)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,    // ← requis pour iOS 17+/18+
+    shouldShowList: true,      // ← requis pour iOS 17+/18+
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+// Fonction d’initialisation complète
+const setupNotifications = async () => {
+  try {
+    // Permissions
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+
+    if (existing !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') {
+      Alert.alert(
+        'Notifications désactivées',
+        'Les rappels ne fonctionneront pas sans autorisation.\n' +
+          'Allez dans Réglages > [Nom de l’app] > Notifications et activez-les.'
+      );
+      return;
+    }
+
+    // Canal Android (optionnel mais fortement recommandé)
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('tasks-reminders', {
+        name: 'Rappels de tâches',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 400, 200, 400],
+        lightColor: '#6366f1',
+        sound: 'default',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+      });
+      console.log('[Notifications] Canal Android configuré');
+    }
+
+    console.log('[Notifications] Prêt – permissions accordées');
+  } catch (err) {
+    console.error('[Notifications] Erreur lors de la configuration:', err);
+  }
+};
+
 export default function RootLayout() {
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+
   useEffect(() => {
-    // 1. Configurer le comportement des notifications
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
+    // Initialisation
+    setupNotifications();
 
-    // 2. Demander les permissions (seulement si pas encore accordées)
-    const requestPermissions = async () => {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync({
-          ios: {
-            allowAlert: true,
-            allowBadge: true,
-            allowSound: true,
-          },
-        });
-        finalStatus = status;
-      }
-
-      if (finalStatus !== 'granted') {
-        if (Platform.OS === 'ios') {
-          Alert.alert(
-            'Notifications désactivées',
-            'Les rappels ne fonctionneront pas sans autorisation.\n' +
-              'Veuillez activer les notifications dans Réglages > [Nom de l’app] > Notifications.'
-          );
-        }
-      }
-    };
-
-    requestPermissions();
-
-    // 3. Écouter les clics sur les notifications
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(
+    // Listener clic notification
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const data = response.notification.request.content.data;
-        const taskId = data?.taskId;
+        const data = response.notification.request.content.data as
+          | { taskId?: string }
+          | undefined;
 
-        if (taskId) {
-          router.push(`/task/${taskId}`);
+        if (data?.taskId) {
+          console.log('[Notifications] Navigation vers tâche:', data.taskId);
+          router.push(`/task/${data.taskId}`);
         } else {
-          console.warn('Notification cliquée sans taskId', data);
+          console.warn('[Notifications] Clic sans taskId:', data);
         }
       }
     );
 
-    // Optionnel : écouter les notifications reçues (foreground)
-    // const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
-    //   console.log('Notification reçue en foreground:', notification.request.content.body);
-    // });
-
-    // Nettoyage
+    // Nettoyage propre
     return () => {
-      responseSubscription.remove();
-      // receivedSubscription?.remove();
+      responseListener.current?.remove();
     };
   }, []);
 

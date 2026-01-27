@@ -15,16 +15,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTaskStore } from '@/stores/taskStore'; // ← UTILISE LE STORE ICI
+import { useTaskStore } from '@/stores/taskStore';
+import { Task } from '@/data/database';
 import * as Haptics from 'expo-haptics';
 
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
-  const { allTasks, updateExistingTask, removeTask, toggleTaskDone } = useTaskStore();
+  const { updateExistingTask, removeTask, toggleTaskDone } = useTaskStore();
 
-  const [task, setTask] = useState<any>(null);
+  const [task, setTask] = useState<Task | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -34,9 +35,9 @@ export default function TaskDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
 
-  // Charger la tâche depuis le STORE
+  // Charger la tâche depuis le store
   useEffect(() => {
-    const foundTask = allTasks.find((t) => t.id === id);
+    const foundTask = useTaskStore.getState().allTasks.find((t) => t.id === id);
     if (foundTask) {
       setTask(foundTask);
       setTitle(foundTask.title);
@@ -52,7 +53,7 @@ export default function TaskDetailScreen() {
       Alert.alert('Erreur', 'Tâche introuvable');
       router.back();
     }
-  }, [id, allTasks, router, fadeAnim]);
+  }, [id, router, fadeAnim]);
 
   const handleDateChange = useCallback((_: any, date?: Date) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
@@ -70,30 +71,30 @@ export default function TaskDetailScreen() {
 
   const handleSaveChanges = useCallback(async () => {
     if (!title.trim()) {
-      Alert.alert('Erreur', 'Le titre est obligatoire');
-      return;
+      return Alert.alert('Erreur', 'Le titre est obligatoire');
     }
 
     if (!selectedDate) {
-      Alert.alert('Erreur', 'Date et heure obligatoires');
-      return;
+      return Alert.alert('Erreur', 'Date et heure obligatoires');
     }
 
     const now = new Date();
     if (selectedDate <= now) {
-      Alert.alert('Erreur', 'La tâche doit être dans le futur');
-      return;
+      return Alert.alert('Erreur', 'La tâche doit être dans le futur');
     }
 
     try {
-      await updateExistingTask(task.id, {
+      await updateExistingTask(task!.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         date: selectedDate.toISOString(),
         repeat,
       });
 
-      // Le store met déjà à jour allTasks → pas besoin de recharger manuellement
+      // Le store met à jour allTasks → on recharge depuis le store
+      const updatedTask = useTaskStore.getState().allTasks.find((t) => t.id === task!.id);
+      if (updatedTask) setTask(updatedTask);
+
       setIsEditing(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Succès', 'Tâche modifiée !');
@@ -101,7 +102,7 @@ export default function TaskDetailScreen() {
       console.error('Erreur modification:', err);
       Alert.alert('Erreur', 'Impossible de modifier la tâche');
     }
-  }, [task?.id, title, description, selectedDate, repeat, updateExistingTask]);
+  }, [task, title, description, selectedDate, repeat, updateExistingTask]);
 
   const handleDelete = useCallback(() => {
     Alert.alert('Supprimer ?', 'Cette action est irréversible', [
@@ -110,7 +111,7 @@ export default function TaskDetailScreen() {
         text: 'Supprimer',
         style: 'destructive',
         onPress: async () => {
-          await removeTask(task.id);
+          await removeTask(task!.id);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           Alert.alert('Supprimée', 'La tâche a été supprimée');
           router.back();
@@ -120,7 +121,7 @@ export default function TaskDetailScreen() {
   }, [task?.id, removeTask, router]);
 
   const toggleDone = useCallback(() => {
-    toggleTaskDone(task.id);
+    toggleTaskDone(task!.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [task?.id, toggleTaskDone]);
 
@@ -147,8 +148,7 @@ export default function TaskDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={16}>
           <MaterialIcons name="arrow-back" size={28} color="#334155" />
         </TouchableOpacity>
@@ -170,7 +170,7 @@ export default function TaskDetailScreen() {
             color={isEditing ? '#ef4444' : '#6366f1'}
           />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {isEditing ? (
@@ -247,7 +247,7 @@ export default function TaskDetailScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <Animated.View style={[styles.viewContainer, { opacity: fadeAnim }]}>
+          <Animated.View style={[styles.taskContainer, { opacity: fadeAnim }]}>
             <View style={styles.taskCard}>
               <TouchableOpacity onPress={toggleDone} style={styles.doneButton}>
                 <MaterialIcons
@@ -303,7 +303,7 @@ export default function TaskDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Date & Time Pickers */}
+      {/* Pickers */}
       {Platform.OS !== 'web' && showDatePicker && (
         <DateTimePicker
           value={selectedDate || new Date()}
@@ -466,6 +466,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 17,
     fontWeight: '700',
+  },
+
+  taskContainer: {
+    padding: 16,
   },
 
   taskCard: {
