@@ -1,34 +1,28 @@
 // app/_layout.tsx
+import { Stack, useRouter } from 'expo-router'; // ← AJOUTE useRouter ICI
+import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router, Stack } from 'expo-router';
-import { useEffect, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
+import { initDatabase } from '@/data/database';
 
-// Configuration globale des notifications (doit être appelée une seule fois)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldShowBanner: true,    // ← requis pour iOS 17+/18+
-    shouldShowList: true,      // ← requis pour iOS 17+/18+
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
 });
 
-// Fonction d’initialisation complète
 const setupNotifications = async () => {
   try {
-    // Permissions
     const { status: existing } = await Notifications.getPermissionsAsync();
     let finalStatus = existing;
 
     if (existing !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync({
-        ios: {
-          allowAlert: true,
-          allowBadge: true,
-          allowSound: true,
-        },
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
       });
       finalStatus = status;
     }
@@ -36,13 +30,11 @@ const setupNotifications = async () => {
     if (finalStatus !== 'granted') {
       Alert.alert(
         'Notifications désactivées',
-        'Les rappels ne fonctionneront pas sans autorisation.\n' +
-          'Allez dans Réglages > [Nom de l’app] > Notifications et activez-les.'
+        'Activez les notifications dans Réglages → [Votre App] → Notifications.'
       );
       return;
     }
 
-    // Canal Android (optionnel mais fortement recommandé)
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('tasks-reminders', {
         name: 'Rappels de tâches',
@@ -50,46 +42,34 @@ const setupNotifications = async () => {
         vibrationPattern: [0, 400, 200, 400],
         lightColor: '#6366f1',
         sound: 'default',
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
       });
-      console.log('[Notifications] Canal Android configuré');
     }
-
-    console.log('[Notifications] Prêt – permissions accordées');
   } catch (err) {
-    console.error('[Notifications] Erreur lors de la configuration:', err);
+    console.error('[Notifications] Setup error:', err);
   }
 };
 
 export default function RootLayout() {
-  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const router = useRouter(); // ← DÉCLARE LE HOOK ICI
 
   useEffect(() => {
-    // Initialisation
+    // Initialisation DB + Notifications
+    initDatabase();
     setupNotifications();
 
-    // Listener clic notification
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data as
-          | { taskId?: string }
-          | undefined;
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const taskId = response.notification.request.content.data?.taskId as string | undefined;
 
-        if (data?.taskId) {
-          console.log('[Notifications] Navigation vers tâche:', data.taskId);
-          router.push(`/task/${data.taskId}`);
-        } else {
-          console.warn('[Notifications] Clic sans taskId:', data);
-        }
+      if (taskId) {
+        console.log('[Notifications] Navigation vers tâche:', taskId);
+        router.push(`/task/${taskId}`);
+      } else {
+        console.warn('[Notifications] Clic sans taskId:', response.notification.request.content.data);
       }
-    );
+    });
 
-    // Nettoyage propre
-    return () => {
-      responseListener.current?.remove();
-    };
-  }, []);
+    return () => subscription.remove();
+  }, [router]); // ← Ajoute router dans les dépendances (bonne pratique)
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

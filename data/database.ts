@@ -1,3 +1,4 @@
+// data/database.ts
 import { Platform } from 'react-native';
 
 export interface Task {
@@ -11,29 +12,26 @@ export interface Task {
   createdAt: string;
 }
 
-type AddTaskFn = (task: Omit<Task, 'id' | 'createdAt'>) => Promise<Task>;
-type GetAllTasksFn = () => Promise<Task[]>;
-type GetTasksForTodayFn = () => Promise<Task[]>;
-type UpdateTaskFn = (
-  id: string,
-  updates: Partial<Omit<Task, 'id' | 'createdAt'>>
-) => Promise<void>;
-type DeleteTaskFn = (id: string) => Promise<void>;
-type InitDatabaseFn = () => Promise<void>;
+type InitFn = () => void;
+type AddFn = (task: Omit<Task, 'id' | 'createdAt'>) => Promise<Task>;
+type GetAllFn = () => Promise<Task[]>;
+type GetTodayFn = () => Promise<Task[]>;
+type UpdateFn = (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => Promise<void>;
+type DeleteFn = (id: string) => Promise<void>;
 
 let impl: {
-  initDatabase: InitDatabaseFn;
-  addTask: AddTaskFn;
-  getAllTasks: GetAllTasksFn;
-  getTasksForToday: GetTasksForTodayFn;
-  updateTask: UpdateTaskFn;
-  deleteTask: DeleteTaskFn;
+  initDatabase: InitFn;
+  addTask: AddFn;
+  getAllTasks: GetAllFn;
+  getTasksForToday: GetTodayFn;
+  updateTask: UpdateFn;
+  deleteTask: DeleteFn;
 };
 
 if (Platform.OS === 'web') {
-  impl = require('./database.web');
+  impl = require('./database.web').default;
 } else {
-  impl = require('./database.native');
+  impl = require('./database.native').default;
 }
 
 export const initDatabase = impl.initDatabase;
